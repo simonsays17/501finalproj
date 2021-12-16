@@ -19,9 +19,7 @@ When you click the **Knit** button a document will be generated that includes bo
 
 
 
-
-
-
+Here we first created a movie seasons variable. In which movies were borken down by the season they were released in then factored. we then removed varibales that we knew based on when they were collected after the theatre release date. We also removed actor, director and title, because we decided that creating factors for each of these would become very messy, which is why we instead used actor award and director award to see if an actor or the director of a new movie has previosly won best actor or best director. 
 ```{r}
 load(url("http://people.math.binghamton.edu/qiao/data501/data/movies.RData"))
 
@@ -48,11 +46,12 @@ movies.lm.A2= lm(audience_score~. ,data=SetA2)
 summary(movies.lm.A2)
 
 ```
+here we ran an outlier test in which no outliers were discovered
 ```{r}
 library(car)
 outlierTest(movies.lm.A2)
 ```
-
+Here is the creation of the vif test to see if there is multicollinarity. Our results shows that there is multicolinarity in our mpaa_ratings so we decided to remove them from the
 ```{r}
 X2 = model.matrix(movies.lm.A2)[,-1]
 R2 = cor(X2)
@@ -65,7 +64,7 @@ faraway::vif(X2)
 
 ## 
 
-
+Here is the re running of the vif test in which we see no signs of multicollinarity anymore
 ```{r}
 movies.rm.A2=lm(audience_score~. -mpaa_rating, data=SetA2)
 summary(movies.rm.A2)
@@ -89,14 +88,15 @@ outlierTest(movies.rm.A2)
 
 ```
 
-
+Here is the diagnostic plots as well as the CrPlots for each variable. From here we see signs of non linearity in the residula vs fitted plot
 ```{r}
-#plot(movies.rm.A2)
+plot(movies.rm.A2)
 
 par(mfrow = c(2,2))
 
 car::crPlots(movies.rm.A2)
 ```
+Here is the creation of the box cox transformation. Here we see that roughly 1.4 is the ideal transformation of our to optimize the linearity of our model.
 ```{r}
 
 MASS::boxcox(movies.rm.A2)
@@ -106,36 +106,18 @@ movies.rml.A2<- lm(audience_score^(1.4)~. -mpaa_rating, data=SetA2)
 
 ```
 
-
+here is the MSE for the OLS model
 ```{r}
 mse.ols2 = mean((SetB2$audience_score - (predict(movies.rml.A2, SetB2))^(1/1.4))^2, na.rm=T)
 sqrt(mse.ols2)
 ```
-
-```{r}
-
-forward_AIC2 = step(lm(audience_score^(1.4)~1, SetA2), list(upper = formula(movies.rml.A2)), 
-                    direction = 'forward', k = 2, trace = F)
-# 
-formula(forward_AIC2)
-```
-
+Here is the formula for the reduced model after the box cox transformation
 ```{r}
 formula(movies.rml.A2)
 ```
 
-best subset suggests to keep 
 
-```{r}
-library(leaps)
-design.A2 = model.matrix(movies.rml.A2)[,-1]
-best_subset2 = leaps(design.A2, SetA2$audience_score, method = 'Cp',nbest = 1)
-plot(best_subset2$size, best_subset2$Cp)
-(indcp=which.min(best_subset2$Cp))
-best.model.Cp2 = best_subset2$which[indcp,]
-best.model.Cp2
-```
-
+Here is the creation all the AIC and BIC models for model selection 
 ```{r}
 forward_AIC2 = step(lm(audience_score^(1.4)~1, SetA2), list(upper = formula(movies.rml.A2)), 
                     direction = 'forward', k = 2, trace = F)
@@ -153,9 +135,8 @@ both_BIC2 = step(lm(audience_score^(1.4)~1, SetA2), list(upper = formula(movies.
                     direction = 'both', k = log(nrow(design.A2)), trace = F)
 ```
 
+Here displays is the MSE of the AIC and BIC methods of model selection and from there the model with the lowest MSE is chosen. In this instance forward AIC is chosen,
 ```{r}
-
-
 #MSE foward AIC
 mse_F_AIC= mean((SetB2$audience_score -(predict(forward_AIC2, SetB2))^(1/1.4))^2)
 sqrt(mse_F_AIC)
@@ -172,7 +153,7 @@ sqrt(mse_B_BIC)
 mse_both_BIC2= mean((SetB2$audience_score - (predict(both_BIC2, SetB2))^(1/1.4))^2)
 sqrt(mse_both_BIC2)
 ```
-
+this chunk displays the chosen  formula from model selection and coef for each varible in that formula
 ```{r}
 #formula(forward_AIC2)
 
@@ -183,10 +164,11 @@ sqrt(mse_both_BIC2)
 coef(forward_BIC2)
 #summary(forward_BIC2)
 ```
+Here we can see the the 4 diagnostic plots for our final model
 ```{r}
 plot(forward_BIC2)
 ```
-
+This chunk here uses the forward BIC model to predict the audience score for 2 specific movies. This is done by using the predict funciton to put the data into the fucntion and then we take that value and transoform it back out of its box cox transformation
 ```{r}
 #prediction
 newdata=data.frame(genre='Drama', best_dir_win='yes', thtr_rel_year= 2021)
