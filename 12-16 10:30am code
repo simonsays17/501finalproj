@@ -1,0 +1,178 @@
+---
+title: "final project 501"
+author: "Daniel Vascones"
+date: "12/14/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+## what are the best predictors for predicting imdb ratings
+## how does the change in year affect imdb ratings, do they change over time
+## what factors are most important win best picture
+## what factors are most important for predicting rotten tomatos audience score
+
+
+
+
+
+```{r}
+load(url("http://people.math.binghamton.edu/qiao/data501/data/movies.RData"))
+
+movies_alt=movies
+
+df = subset(movies_alt, select = -c(imdb_num_votes , critics_rating, critics_score, audience_rating, audience_score, best_pic_nom, best_pic_win, top200_box, imdb_url, rt_url, actor1, actor2, actor3, actor4, actor5, director, title, studio))
+
+
+df=na.omit(df)
+set.seed(1234)
+index = sample(c(rep(TRUE,442), rep(FALSE,200)))
+SetA=df[index, ]
+SetB=df[!index, ]
+
+
+
+movies.lm.A= lm(imdb_rating~. ,data=SetA)
+summary(movies.lm.A)
+
+```
+
+```{r}
+X = model.matrix(movies.lm.A)[,-1]
+R = cor(X)
+ev = eigen(R)$val
+sqrt(ev[1]*(ev)^(-1))
+
+library(faraway)
+faraway::vif(X)
+```
+
+## Dealing with colinearity
+
+
+```{r}
+movies.rm.A=lm(imdb_rating~. -mpaa_rating, data=SetA.125)
+summary(movies.rm.A)
+
+
+X.rm = model.matrix(movies.rm.A)[,-1]
+R.rm = cor(X.rm)
+ev.rm = eigen(R.rm)$val
+sqrt(ev.rm[1]*(ev.rm)^(-1))
+
+library(faraway)
+faraway::vif(X.rm)
+
+
+#movies.scale.X = scale(model.frame(movies.lm.A)[,-1])
+#PCA = princomp(movies.scale.X, cor=TRUE)
+#PCA$loadings  #loading matrix
+#summary(PCA)  # variance
+
+
+```
+```{r}
+library(GGally)
+library(car)
+outlierTest(movies.rm.A)
+```
+
+```{r}
+SetA.125=SetA[-c(256),] 
+movies.rm125.A=lm(imdb_rating~. -mpaa_rating, data=SetA.125)
+outlierTest(movies.rm125.A)
+#summary(movies.rm125.A)
+```
+
+
+
+```{r}
+mse.ols = mean((SetB$imdb_rating - predict(movies.rm.A, SetB))^2, na.rm=T)
+sqrt(mse.ols)
+```
+
+```{r}
+
+forward_AIC = step(lm(imdb_rating~1, SetA), list(upper = formula(movies.rm.A)), 
+                    direction = 'forward', k = 2, trace = F)
+# 
+formula(forward_AIC)
+```
+
+```{r}
+formula(movies.rm.A)
+```
+
+best subset suggests to keep 
+
+
+
+
+```{r}
+backward_AIC = step(movies.rm.A, list(lower= ~1), direction = 'backward', trace = F)
+
+# 
+forward_BIC = step(lm(imdb_rating~1, SetA), list(upper = formula(movies.rm.A)), 
+                    direction = 'forward', k = log(nrow(design.A)), trace = F)
+
+
+backward_BIC = step(movies.rm.A,list(lower= ~1), direction = 'backward', k=log(nrow(design.A)), trace = F)
+# 
+both_BIC = step(lm(imdb_rating~1, SetA), list(upper = formula(movies.rm.A), lower= ~ 1), 
+                    direction = 'both', k = log(nrow(design.A)), trace = F)
+```
+
+
+```{r}
+formula(backward_AIC)
+ formula(forward_BIC)
+ formula(backward_BIC)
+ formula(both_BIC)
+```
+
+```{r}
+mse.search1 = mean((SetB$imdb_rating - predict(backward_AIC, SetB))^2)
+mse.search2 = mean((SetB$imdb_rating - predict(forward_BIC, SetB))^2)
+mse.search3 = mean((SetB$imdb_rating - predict(backward_BIC, SetB))^2)
+mse.search4 = mean((SetB$imdb_rating - predict(both_BIC, SetB))^2)
+mse.search5 = mean((SetB$imdb_rating - predict(forward_AIC, SetB))^2)
+
+
+sqrt(data.frame(mse.ols,mse.search1,mse.search2,mse.search3,mse.search4,mse.search5))
+```
+
+While all three BIC models have slighlty better prediction power, we will choose the Backward AIC model because it includes more predictors with comparable prediction power
+
+
+```{r}
+#scaled.movies= scale(model.frame(movies.rm.A))
+par(mfrow=c(2,2))
+plot(movies.rm.A)
+#plot(scaled.movies)
+plot(backward_AIC)
+
+```
+
+```{r}
+summary(backward_AIC)
+```
+
+
+
+
+
+
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
