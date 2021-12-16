@@ -16,7 +16,10 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 
-
+## what are the best predictors for predicting imdb ratings
+## how does the change in year affect imdb ratings, do they change over time
+## what factors are most important win best picture
+## what factors are most important for predicting rotten tomatos audience score
 
 
 
@@ -26,16 +29,24 @@ When you click the **Knit** button a document will be generated that includes bo
 load(url("http://people.math.binghamton.edu/qiao/data501/data/movies.RData"))
 
 movies_alt=movies
-df = subset(movies_alt, select = -c(imdb_num_votes , critics_rating, critics_score, audience_rating, audience_score, best_pic_nom, best_pic_win, top200_box, imdb_url, rt_url, actor1, actor2, actor3, actor4, actor5, director, title, studio))
+
+movies_alt$season <- factor(ifelse(movies$thtr_rel_month %in% c(12,1,2), "Winter",
+                        ifelse(movies$thtr_rel_month %in% c(3,4,5), "Spring",
+                              ifelse(movies$thtr_rel_month %in% c(6,7,8), "Summer",
+                                     ifelse(movies$thtr_rel_month %in% c(9,10,11), "Fall",
+                                            NA)))))
 
 
+df = subset(movies_alt, select = -c(imdb_num_votes , critics_rating, critics_score, audience_rating, audience_score, best_pic_nom, best_pic_win, top200_box, imdb_url, rt_url, actor1, actor2, actor3, actor4, actor5, director, title, studio, thtr_rel_month,thtr_rel_day, dvd_rel_month, dvd_rel_day))
+
+
+df=na.omit(df)
 set.seed(1234)
-index = sample(c(rep(TRUE,450), rep(FALSE,201)))
+index = sample(c(rep(TRUE,442), rep(FALSE,200)))
 SetA=df[index, ]
 SetB=df[!index, ]
 
-SetA=na.omit(SetA)
-SetB=na.omit(SetB)
+
 
 movies.lm.A= lm(imdb_rating~. ,data=SetA)
 summary(movies.lm.A)
@@ -50,9 +61,13 @@ sqrt(ev[1]*(ev)^(-1))
 
 library(faraway)
 faraway::vif(X)
+
+
 ```
 
-## 
+## Dealing with colinearity
+
+
 ```{r}
 movies.rm.A=lm(imdb_rating~. -mpaa_rating, data=SetA)
 summary(movies.rm.A)
@@ -73,18 +88,55 @@ faraway::vif(X.rm)
 #summary(PCA)  # variance
 
 
+
+
 ```
 
 
 
 ```{r}
-mse.ols = mean((SetB$imdb_rating - predict(movies.rm.A, SetB))^2, na.rm=T)
+
+library(car)
+plot(movies.rm.A)
+
+par(mfrow = c(2,2))
+
+crPlots(movies.rm.A)
+```
+
+```{r}
+
+MASS::boxcox(movies.rm.A)
+MASS::boxcox(movies.rm.A, plotit=T, lambda= seq(1.1,1.8, by=0.1))
+
+movies.rml.A<- lm(imdb_rating^(1.7)~. -mpaa_rating, data=SetA)
+
+
+```
+
+
+
+
+
+```{r}
+library(GGally)
+library(car)
+outlierTest(movies.rml.A)
+
+```
+
+
+
+
+
+```{r}
+mse.ols = mean((SetB$imdb_rating - (predict(movies.rml.A, SetB))^(1/1.7))^2)
 sqrt(mse.ols)
 ```
 
 ```{r}
 
-forward_AIC = step(lm(imdb_rating~1, SetA), list(upper = formula(movies.rm.A)), 
+forward_AIC = step(lm(imdb_rating^(1.7)~1, SetA), list(upper = formula(movies.rml.A)), 
                     direction = 'forward', k = 2, trace = F)
 # 
 formula(forward_AIC)
@@ -92,13 +144,15 @@ formula(forward_AIC)
 
 ```{r}
 formula(movies.rm.A)
+
 ```
 
 best subset suggests to keep 
 
+
 ```{r}
 library(leaps)
-design.A = model.matrix(movies.rm.A)[,-1]
+design.A = model.matrix(movies.rml.A)[,-1]
 best_subset = leaps(design.A, SetA$imdb_rating, method = 'Cp',nbest = 1)
 plot(best_subset$size, best_subset$Cp)
 (indcp=which.min(best_subset$Cp))
@@ -106,17 +160,18 @@ best.model.Cp = best_subset$which[indcp,]
 best.model.Cp
 ```
 
+
 ```{r}
-backward_AIC = step(movies.rm.A, list(lower= ~1), direction = 'backward', trace = F)
+backward_AIC = step(movies.rml.A, list(lower= ~1), direction = 'backward', trace = F)
 
 # 
-forward_BIC = step(lm(imdb_rating~1, SetA), list(upper = formula(movies.rm.A)), 
+forward_BIC = step(lm(imdb_rating^(1.7)~1, SetA), list(upper = formula(movies.rml.A)), 
                     direction = 'forward', k = log(nrow(design.A)), trace = F)
 
 
-backward_BIC = step(movies.rm.A,list(lower= ~1), direction = 'backward', k=log(nrow(design.A)), trace = F)
+backward_BIC = step(movies.rml.A,list(lower= ~1), direction = 'backward', k=log(nrow(design.A)), trace = F)
 # 
-both_BIC = step(lm(imdb_rating~1, SetA), list(upper = formula(movies.rm.A), lower= ~ 1), 
+both_BIC = step(lm(imdb_rating^(1.7)~1, SetA), list(upper = formula(movies.rml.A), lower= ~ 1), 
                     direction = 'both', k = log(nrow(design.A)), trace = F)
 ```
 
@@ -126,35 +181,41 @@ formula(backward_AIC)
  formula(forward_BIC)
  formula(backward_BIC)
  formula(both_BIC)
+ formula(forward_AIC)
 ```
 
 ```{r}
-mse.search = mean((SetB$imdb_rating - predict(forward_AIC, SetB))^2)
-sqrt(mse.search)
+
+mse.search1 = mean((SetB$imdb_rating - (predict(backward_AIC, SetB))^(1/1.7))^2)
+mse.search2 = mean((SetB$imdb_rating - (predict(forward_BIC, SetB))^(1/1.7))^2)
+mse.search3 = mean((SetB$imdb_rating - (predict(backward_BIC, SetB))^(1/1.7))^2)
+mse.search4 = mean((SetB$imdb_rating - (predict(both_BIC,SetB))^(1/1.7))^2)
+mse.search5 = mean((SetB$imdb_rating - (predict(forward_AIC, SetB))^(1/1.7))^2)
+
+
+sqrt(data.frame(mse.ols,mse.search1,mse.search2,mse.search3,mse.search4,mse.search5))
+```
+
+We will choose the Backward AIC model because it includes more predictors than some of the other models while having the best prediction power.
+
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(movies.rml.A)
+#plot(scaled.movies)
+plot(backward_AIC)
+
 ```
 
 ```{r}
-formula(movies.lm.A)
+
 ```
 
-```{r}
-formula(movies.lm.A)
-```
 
 ```{r}
-formula(movies.lm.A)
-```
-
-```{r}
-formula(movies.lm.A)
-```
-
-```{r}
-formula(movies.lm.A)
-```
-
-```{r}
-formula(movies.lm.A)
+#coef(backward_AIC)
+anova(backward_AIC)
 ```
 
 ```{r}
