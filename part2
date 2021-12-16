@@ -1,0 +1,175 @@
+---
+title: "final project 501"
+author: "Daniel Vascones"
+date: "12/14/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+
+
+
+
+
+```{r}
+load(url("http://people.math.binghamton.edu/qiao/data501/data/movies.RData"))
+
+movies_alt2=movies
+df2 = subset(movies_alt2, select = -c(imdb_num_votes , critics_rating, audience_rating, imdb_rating, audience_score, best_pic_nom, best_pic_win, top200_box, imdb_url, rt_url, actor1, actor2, actor3, actor4, actor5, director, title, studio))
+
+
+set.seed(1234)
+index2 = sample(c(rep(TRUE,450), rep(FALSE,201)))
+SetA2=df[index, ]
+SetB2=df[!index, ]
+
+SetA2=na.omit(SetA2)
+SetB2=na.omit(SetB2)
+
+movies.lm.A2= lm(critics_score~. ,data=SetA2)
+summary(movies.lm.A2)
+
+```
+
+```{r}
+X2 = model.matrix(movies.lm.A2)[,-1]
+R2 = cor(X2)
+ev2 = eigen(R2)$val
+sqrt(ev[1]*(ev2)^(-1))
+
+library(faraway)
+faraway::vif(X2)
+```
+
+## 
+
+
+```{r}
+movies.rm.A2=lm(critics_score~. -mpaa_rating, data=SetA2)
+summary(movies.rm.A2)
+
+
+X.rm2 = model.matrix(movies.rm.A2)[,-1]
+R.rm2 = cor(X.rm2)
+ev.rm2 = eigen(R.rm2)$val
+sqrt(ev.rm2[1]*(ev.rm2)^(-1))
+
+library(faraway)
+faraway::vif(X.rm2)
+
+
+#movies.scale.X = scale(model.frame(movies.lm.A)[,-1])
+#PCA = princomp(movies.scale.X, cor=TRUE)
+#PCA$loadings  #loading matrix
+#summary(PCA)  # variance
+
+
+```
+
+```{r}
+#plot(movies.rm.A2)
+
+crPlots(movies.rm.A2)
+```
+
+
+```{r}
+mse.ols2 = mean((SetB2$critics_score - predict(movies.rm.A2, SetB2))^2, na.rm=T)
+sqrt(mse.ols2)
+```
+
+```{r}
+
+forward_AIC2 = step(lm(critics_score~1, SetA2), list(upper = formula(movies.rm.A2)), 
+                    direction = 'forward', k = 2, trace = F)
+# 
+formula(forward_AIC2)
+```
+
+```{r}
+formula(movies.rm.A2)
+```
+
+best subset suggests to keep 
+
+```{r}
+library(leaps)
+design.A2 = model.matrix(movies.rm.A2)[,-1]
+best_subset2 = leaps(design.A2, SetA$critics_score, method = 'Cp',nbest = 1)
+plot(best_subset2$size, best_subset2$Cp)
+(indcp=which.min(best_subset2$Cp))
+best.model.Cp2 = best_subset2$which[indcp,]
+best.model.Cp2
+```
+
+```{r}
+backward_AIC2 = step(movies.rm.A2, list(lower= ~1), direction = 'backward', trace = F)
+
+# 
+forward_BIC2 = step(lm(critics_score~1, SetA2), list(upper = formula(movies.rm.A2)), 
+                    direction = 'forward', k = log(nrow(design.A2)), trace = F)
+
+
+backward_BIC2 = step(movies.rm.A2,list(lower= ~1), direction = 'backward', k=log(nrow(design.A2)), trace = F)
+# 
+both_BIC2 = step(lm(critics_score~1, SetA2), list(upper = formula(movies.rm.A2), lower= ~ 1), 
+                    direction = 'both', k = log(nrow(design.A2)), trace = F)
+```
+
+
+```{r}
+formula(backward_AIC2)
+ formula(forward_BIC2)
+ formula(backward_BIC2)
+ formula(both_BIC2)
+```
+
+```{r}
+mse.search2 = mean((SetB2$critics_score - predict(forward_AIC2, SetB2))^2)
+sqrt(mse2.search)
+```
+
+```{r}
+formula(movies.lm.A)
+```
+
+```{r}
+formula(movies.lm.A)
+```
+
+```{r}
+formula(movies.lm.A)
+```
+
+```{r}
+formula(movies.lm.A)
+```
+
+```{r}
+formula(movies.lm.A)
+```
+
+```{r}
+formula(movies.lm.A)
+```
+
+```{r}
+formula(movies.lm.A)
+```
+
+```{r}
+formula(movies.lm.A)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
