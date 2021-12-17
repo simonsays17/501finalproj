@@ -1,0 +1,40 @@
+#Create Boxplot for EDA comparing summary statistics of scores 
+aud_df=data.frame("Audience",movies$audience_score)
+colnames(aud_df)<-c("Person","Score")
+crit_df=data.frame("Critics",movies$critics_score)
+colnames(crit_df)<-c("Person","Score")
+scores=rbind(aud_df,crit_df)
+scores$Person<-as.factor(scores$Person)
+means <- aggregate(Score ~  Person, scores, mean)
+means$Score<-round(means$Score,digits=2)
+
+box<-ggplot(scores, aes(x=Person, y=Score, color=Person))+geom_boxplot()+stat_summary(fun=mean)+geom_text(data=means, aes(label= Score, y=Score-5))
+box
+
+#Create Scatterplots comparing critic score and audience score
+graph<-ggplot(movies, aes(x=critics_score,y=audience_score))+geom_point()+geom_abline(slope=1,intercept = 0,color='blue',size=1.5)
+graph
+
+#Create Scatterplots comparing critic score and audience score over the years.
+aud_df2=data.frame("Audience",movies$audience_score,movies$thtr_rel_year)
+colnames(aud_df2)<-c("Person","Score","Year")
+crit_df2=data.frame("Critic",movies$critics_score,movies$thtr_rel_year)
+colnames(crit_df2)<-c("Person","Score","Year")
+scat<-rbind(aud_df2,crit_df2)
+graph2<-ggplot(scat, aes(x=Year, y=Score,color=Person))+geom_point()+geom_smooth()
+graph2
+
+#Create Dataframe to summarize different variables for grouping statistics
+aud_df3=data.frame("Audience",movies$audience_score,movies$genre,movies$title_type,movies$mpaa_rating)
+colnames(aud_df3)<-c("Person","Score","Genre","Title Type","MPAA Rating")
+crit_df3=data.frame("Audience",movies$critics_score,movies$genre,movies$title_type,movies$mpaa_rating)
+colnames(crit_df3)<-c("Person","Score","Genre","Title Type","MPAA Rating")
+q2<-rbind(aud_df2,crit_df2)
+
+#Apply summary statistics by groups
+tapply(q2$Score,q2$`MPAA Rating`,summary)
+tapply(q2$Score,q2$`Title Type`,summary)
+
+#Boxplot of genre summary statistics
+graph3<-ggplot(q2, aes(y=Score,color=Genre ))+geom_boxplot()+theme(axis.ticks.x = element_blank(),axis.text.x = element_blank())
+graph3
