@@ -110,12 +110,6 @@ MASS::boxcox(movies.rm.A, plotit=T, lambda= seq(.8,1.5, by=0.1))
 
 
 
-```{r}
-library(GGally)
-library(car)
-outlierTest(movies.rm.A)
-
-```
 
 
 
