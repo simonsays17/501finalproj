@@ -1,0 +1,225 @@
+---
+title: "Untitled"
+author: "Daniel Vascones"
+date: "12/16/2021"
+output: html_document
+---
+
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+## what are the best predictors for predicting imdb ratings
+## how does the change in year affect imdb ratings, do they change over time
+## what factors are most important win best picture
+## what factors are most important for predicting rotten tomatos audience score
+
+
+
+
+We start by loading the data. Creating the season factor turns the numerical value for month into a factor that represents the corresponding season. We are looking to predict critics score on Rotten Tomatoes, so we have to eliminate many predictors. Predictors that must be deleted include other ratings, score, urls, names of people, names of titles and studios. We omit NA's, then split the data into two sets to later test out our model. The first model we create is a multiple linear regression model to predict the critics score.
+
+```{r}
+load(url("http://people.math.binghamton.edu/qiao/data501/data/movies.RData"))
+
+movies_alt=movies
+
+movies_alt$season <- factor(ifelse(movies$thtr_rel_month %in% c(12,1,2), "Winter",
+                        ifelse(movies$thtr_rel_month %in% c(3,4,5), "Spring",
+                              ifelse(movies$thtr_rel_month %in% c(6,7,8), "Summer",
+                                     ifelse(movies$thtr_rel_month %in% c(9,10,11), "Fall",
+                                            NA)))))
+
+
+df3 = subset(movies_alt, select = -c(imdb_rating, imdb_num_votes , critics_rating, audience_rating, audience_score, best_pic_nom, best_pic_win, top200_box, imdb_url, rt_url, actor1, actor2, actor3, actor4, actor5, director, title, studio, thtr_rel_month,thtr_rel_day, dvd_rel_month, dvd_rel_day))
+
+
+df3=na.omit(df3)
+set.seed(1234)
+index = sample(c(rep(TRUE,442), rep(FALSE,200)))
+SetA3=df3[index, ]
+SetB3=df3[!index, ]
+
+
+
+movies.lm.A3= lm(critics_score~. ,data=SetA3)
+summary(movies.lm.A3)
+
+```
+
+## Dealing with colinearity
+We test for colinearity through the use of condition indicies and vifs
+
+```{r}
+X = model.matrix(movies.lm.A3)[,-1]
+R = cor(X)
+ev = eigen(R)$val
+sqrt(ev[1]*(ev)^(-1))
+
+library(faraway)
+faraway::vif(X)
+
+
+```
+
+It appears that the mpaa_ratings have colinearity with eachother, so we remove it from our model.
+
+
+```{r}
+movies.rm.A=lm(critics_score~. -mpaa_rating, data=SetA3)
+summary(movies.rm.A)
+
+
+X.rm = model.matrix(movies.rm.A)[,-1]
+R.rm = cor(X.rm)
+ev.rm = eigen(R.rm)$val
+sqrt(ev.rm[1]*(ev.rm)^(-1))
+
+library(faraway)
+faraway::vif(X.rm)
+
+
+```
+
+We now inspect our residual plots and crPlots. The diagnostic plots seem fine, and the crPlots does not seem that the relation between the response and any of the predictors is beyond linear
+
+```{r}
+
+library(car)
+plot(movies.rm.A)
+
+par(mfrow = c(2,2))
+
+crPlots(movies.rm.A)
+```
+We check to see if  there is a tranformation needed. since 1 is in our 95% confidence interval, there is no reason to transform the response
+
+```{r}
+
+MASS::boxcox(movies.rm.A)
+MASS::boxcox(movies.rm.A, plotit=T, lambda= seq(.8,1.5, by=0.1))
+```
+
+
+
+
+
+```{r}
+library(GGally)
+library(car)
+outlierTest(movies.rm.A)
+
+```
+
+
+
+We test our first model on our test set. we receive a square root mse of 25.27. Our response ranges from the value of 1 to 100, so the mse is not a bad result.
+
+```{r}
+
+mse.ols = mean((SetB3$critics_score - predict(movies.rm.A, SetB3))^2)              
+sqrt(mse.ols)
+```
+We begin step-wise selection to see if we can find a better model
+
+```{r}
+
+forward_AIC = step(lm(critics_score~1, SetA3), list(upper = formula(movies.rm.A)), 
+                    direction = 'forward', k = 2, trace = F)
+ 
+formula(forward_AIC)
+```
+
+The model above removes dvd_rel_year, best_actor_win,  best_actress_win, and season from our original reduced model, the model below.
+```{r}
+formula(movies.rm.A)
+
+```
+
+
+
+
+
+
+We try some other step-wise selection methods to find which gives us the lowest mse.
+
+```{r}
+design.A = model.matrix(movies.rm.A)[,-1]
+backward_AIC = step(movies.rm.A, list(lower= ~1), direction = 'backward', trace = F)
+
+# 
+forward_BIC = step(lm(critics_score~1, SetA3), list(upper = formula(movies.rm.A)), 
+                    direction = 'forward', k = log(nrow(design.A)), trace = F)
+
+
+backward_BIC = step(movies.rm.A,list(lower= ~1), direction = 'backward', k=log(nrow(design.A)), trace = F)
+# 
+both_BIC = step(lm(critics_score~1, SetA3), list(upper = formula(movies.rm.A), lower= ~ 1), 
+                    direction = 'both', k = log(nrow(design.A)), trace = F)
+```
+
+These are the formulas for the step-wise selection models.
+
+```{r}
+formula(backward_AIC)
+ formula(forward_BIC)
+ formula(backward_BIC)
+ formula(both_BIC)
+ formula(forward_AIC)
+```
+
+
+
+These are the mse
+```{r}
+mse.ols = mean((SetB3$critics_score - predict(movies.rm.A, SetB3))^2)              
+
+mse.search_back_aic = mean((SetB3$critics_score - predict(backward_AIC, SetB3))^2)  
+mse.search_for_bic = mean((SetB3$critics_score - predict(forward_BIC, SetB3))^2) 
+mse.search_back_bic = mean((SetB3$critics_score - predict(backward_BIC, SetB3))^2) 
+
+mse.search_both_bic = mean((SetB3$critics_score - predict(both_BIC, SetB3))^2) 
+                   
+mse.search_for_aic = mean((SetB3$critics_score - predict(forward_AIC, SetB3))^2) 
+                    
+
+
+sqrt(data.frame(mse.ols,mse.search_back_aic,mse.search_for_bic,mse.search_back_bic, mse.search_both_bic, mse.search_for_aic))
+```
+
+We will choose the Backward AIC model because it includes the same predictors as most of the other models, while having the best prediction power.
+
+
+Below are our residual plots for our first model and our chosen model. Each plot noticeably improves in our chosen model.
+```{r}
+par(mfrow=c(2,2))
+plot(movies.lm.A)
+plot(backward_AIC)
+
+```
+
+
+```{r}
+formula(backward_AIC)
+coef(backward_AIC)
+```
+We make a prediction for a feature film under the genre drama, released in theaters in 2021, a runtime of 120 minutes, and an oscar winning director.
+Our model predicts that this movie would receive a critic score of 67.67% on Rotten Tomatoes.
+
+```{r}
+newdata=data.frame(genre="Drama", thtr_rel_year=2021, title_type="Feature Film" , runtime=120 , best_dir_win="yes")
+(predict(backward_AIC, newdata))
+```
+
+
